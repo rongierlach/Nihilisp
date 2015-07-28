@@ -1,19 +1,24 @@
-// To compile on mac & linux
-// On Linux you will also have to link to the maths library: -lm
-// cc -std=c99 -Wall <input_filename.c> mpc.c -ledit -lm -o <output_filename>
+// To compile on mac & linux:
 
-// System header so reference with <, >
+// On Linux you will also have to link to the maths library with -lm flag
+// cc -std=c99 -Wall nilisp.c mpc.c -ledit -lm -o nilisp
+
+// On linux you may need to install editline beforehand
+// sudo apt-get install libedit-dev
+
+// On Fedora you can use
+// su -c "yum install libedit-dev*"
+
+#include "mpc.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <editline/readline.h>
 
-// Local header so reference with quotes
-#include "mpc.h"
-
-#ifdef _WIN32
+#ifdef _WIN32 //define something for Windows (32-bit and 64-bit, this part is common)
+#include <string.h>
 
 static char buffer[2048];
 
+/* Fake readline function */
 char* readline(char* prompt) {
   fputs(prompt, stdout);
   fgets(buffer, 2048, stdin);
@@ -23,17 +28,28 @@ char* readline(char* prompt) {
   return cpy;
 }
 
+/* Fake add history function */
 void add_history(char* unused) {}
 
-// System header so reference with <, >
-#elif __APPLE__
+   #ifdef _WIN64 //define something for Windows (64-bit only)
+   #endif
+#elif __APPLE__ //define something for Mac OS
 #include <editline/readline.h>
-#elif __linux
-#include <editline/history.h>
+  #include "TargetConditionals.h"
+  #if TARGET_IPHONE_SIMULATOR // iOS Simulator
+  #elif TARGET_OS_IPHONE // iOS device
+  #elif TARGET_OS_MAC // Other kinds of Mac OS
+  #else // Unsupported platform
+  #endif
+#elif __linux // linux
+#include <editline/readline.h>
+#include <editline/history.h> // histedit.h on Arch Linux
+#elif __unix // Unix - all unices not caught above
+#elif __posix // POSIX
 #endif
 
-int main(int argc, char** argv) {
 
+int main(int argc, char** argv) {
   /* Create Some Parsers */
   mpc_parser_t* Number   = mpc_new("number");
   mpc_parser_t* Operator = mpc_new("operator");
@@ -44,10 +60,10 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                    \
       number   : /-?[0-9]+(\\.[0-9]+)?/;                 \
-      operator : '+' | '-' | '*' | '/' | '%' |           \
-                \"add\" | \"sub\" | \"mul\" | \"div\";   \
-      expr     : <number> | '(' <operator> <expr>+ ')' ; \
-      nilisp   : /^/ <operator> <expr>+ /$/ ;            \
+      operator : '+' | '-' | '*' | '/' | '%' ;           \
+      expr     : <number> | '(' <operator> <expr>+ ')';  \
+      nilisp   : /^/ <operator> <expr>+ /$/ |            \
+                 /^\\(/ <operator> <expr>+ /\\)$/;       \
     ",
     Number, Operator, Expr, Nilisp);
 
@@ -77,5 +93,6 @@ int main(int argc, char** argv) {
 
   /* Undefine and Delete our Parsers */
   mpc_cleanup(4, Number, Operator, Expr, Nilisp);
+
   return 0;
 }
