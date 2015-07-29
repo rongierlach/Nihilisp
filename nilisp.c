@@ -48,6 +48,47 @@ void add_history(char* unused) {}
 #elif __posix // POSIX
 #endif
 
+/* User operator string to see which operation to perform */
+long eval_op(long x, char* op, long y) {
+  if (strcmp(op, "+") == 0) { return x + y; }
+  if (strcmp(op, "-") == 0) { return x - y; }
+  if (strcmp(op, "*") == 0) { return x * y; }
+  if (strcmp(op, "/") == 0) { return x / y; }
+  if (strcmp(op, "%") == 0) { return x % y; }
+  if (strcmp(op, "^") == 0) {
+    long result = 1;
+    for (int i = 0; i < y; i++) { result = result * x; }
+    return result;
+  }
+  if (strcmp(op, "min") == 0) { return (x <= y) ? x : y; }
+  if (strcmp(op, "max") == 0) { return (x >= y) ? x : y; }
+  return 0;
+}
+
+/* evaluate function */
+long eval(mpc_ast_t* t) {
+  /* If tagged as number return it directly. */
+  if (strstr(t->tag, "number")) {
+    return atoi(t->contents);
+  }
+
+  /* The operator is always second child. */
+  char* op = t->children[1]->contents;
+
+  /* We store the third child in 'x' */
+  long x = eval(t->children[2]);
+
+  /* If '-' operator receives one argument, negate it */
+  if (strcmp(op, "-") == 0 && t->children_num < 5) { return 0 - x; }
+
+  /* Iterate the remaining children and combining. */
+  int i = 3;
+  while (strstr(t->children[i]->tag, "expr"))  {
+    x = eval_op(x, op, eval(t->children[i]));
+    i++;
+  }
+  return x;
+}
 
 int main(int argc, char** argv) {
   /* Create Some Parsers */
@@ -60,7 +101,8 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                    \
       number   : /-?[0-9]+(\\.[0-9]+)?/;                 \
-      operator : '+' | '-' | '*' | '/' | '%' ;           \
+      operator : '+' | '-' | '*' | '/' | '%' | '^' |     \
+                \"min\" | \"max\" ;                      \
       expr     : <number> | '(' <operator> <expr>+ ')';  \
       nilisp   : /^/ <operator> <expr>+ /$/ |            \
                  /^\\(/ <operator> <expr>+ /\\)$/;       \
@@ -79,8 +121,9 @@ int main(int argc, char** argv) {
     /* Atempt to Parse the user Input */
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, Nilisp, &r)) {
-      /* On Success Print the AST */
-      mpc_ast_print(r.output);
+      /* On Success Evaluate the AST and Print the response */
+      long result = eval(r.output);
+      printf("%li\n", result);
       mpc_ast_delete(r.output);
     } else {
       /* Otherwise Print the Error */
